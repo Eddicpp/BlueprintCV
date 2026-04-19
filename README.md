@@ -279,6 +279,6 @@ This repository contains only the code. The dataset used for training is proprie
              in Industrial Technical Drawings},
   author = {Eduardo Pane},
   year   = {2026},
-  school = {University}
+  school = {UNIPD}
 }
 ```
