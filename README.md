@@ -9,7 +9,8 @@
 **BlueprintCV** is an end-to-end computer vision pipeline developed as a master's thesis project in collaboration with an industrial partner. The system processes scanned engineering blueprints and automatically:
 
 1. **Detects dimension annotations** (quotes) across the entire drawing
-2. **Identifies the associated GD&T symbol** for each detected dimension
+2. **Locates the GD&T symbol** inside each detected dimension
+3. **Classifies the symbol** into one of 15 GD&T categories
 
 The project benchmarks multiple YOLO architectures on a custom dataset built entirely from real industrial drawings provided by the partner company.
 
@@ -24,22 +25,34 @@ Scanned blueprint
         │
         ▼
 ┌──────────────────────────┐
-│  Stage 1 — Quote Detector │   YOLOv8s / YOLO11s
-│  Finds dimension boxes    │   mAP@50: 0.972
+│  M1 — Quote Detector     │   YOLO11s   mAP@50: 0.972
+│  Finds dimension boxes   │
 └────────────┬─────────────┘
-             │  crop per detected quote
+             │  crop per quote  (+40% context margin)
              ▼
 ┌──────────────────────────┐
-│  Stage 2 — Symbol Detector│   YOLO11n
-│  Finds GD&T symbol inside │   16 classes
+│  M2 — Symbol Detector    │   YOLO11n   mAP@50: 0.966
+│  Locates symbol in crop  │
+└────────────┬─────────────┘
+             │  symbol crop
+             ▼
+┌──────────────────────────┐
+│  M3 — Symbol Classifier  │   YOLO11s-cls   Top-1: 0.937
+│  Classifies symbol type  │
 └──────────────────────────┘
 ```
+
+**Key design choices:**
+- M1 uses **tiling** for large blueprints (>2000px) — the image is split into overlapping tiles, predictions are merged with NMS
+- M2 receives a **context-expanded crop** (40% margin around the quote box) to avoid missing symbols cut at the border
+- Symbols whose center falls **outside** the original quote box are discarded — they belong to adjacent quotes
+- M3 includes a **background class** to reject M2 false positives; detections below 0.50 confidence are suppressed
 
 ---
 
 ## Results
 
-### Stage 1 — Quote Detection
+### M1 — Quote Detection
 
 | Model | Dataset | mAP@50 | F1 | Threshold |
 |---|---|---|---|---|
@@ -48,24 +61,30 @@ Scanned blueprint
 | YOLO11s | augmented v1 | 0.881 | 0.87 | 0.432 |
 | **YOLO11s** | **augmented v2** | **0.972** | **0.96** | **0.422** |
 
-**Key finding:** dataset quality and augmentation strategy had a larger impact on performance than architecture choice alone.
+### M2 — Symbol Detection
 
-### Stage 2 — GD&T Symbol Detection
+| Model | mAP@50 | mAP@50-95 |
+|---|---|---|
+| **YOLO11n** | **0.966** | **0.621** |
 
-| Model | mAP@50 |
-|---|---|
-| YOLO11n | in progress |
+### M3 — Symbol Classification
+
+| Model | Top-1 | Top-5 |
+|---|---|---|
+| **YOLO11s-cls** | **0.937** | **0.995** |
 
 ---
 
-## GD&T Symbol Classes
+## GD&T Symbol Classes (15 + background)
 
 ```
-diameter · radius · angle · surface_finish · concentricity
-cylindricity · position · flatness · perpendicularity
-total_runout · circular_runout · slope · conical_taper
-symmetry · surface_profile · linear
+diameter · radius · surface_finish · concentricity · cylindricity
+position · flatness · perpendicularity · total_runout · circular_runout
+slope · conical_taper · symmetry · surface_profile · linear
 ```
+
+> `angle` was removed — the degree symbol (°) caused systematic false positives
+> due to confusion with decimal points in numeric values.
 
 ---
 
@@ -73,20 +92,37 @@ symmetry · surface_profile · linear
 
 ```
 BlueprintCV/
+│
+├── ── Quote Detection (M1) ──
 ├── convert_to_yolo_global.py          LabelMe JSON → YOLO format + resize
 ├── augment_dataset.py                 Scan-quality augmentation pipeline
 ├── generate_blueprint_strutturato.py  Structured synthetic blueprint generation
+├── augment_angular_quotes.py          Augmentation for angular/arc dimensions
 ├── merge_datasets.py                  Dataset merge utility
 ├── resize_dataset.py                  Batch image resizing
-├── train_yolov8.py                    YOLO training (v8n / v8s / v11s)
-├── extract_quotes_for_labeling.py     Extract quote crops for symbol labeling
+├── train_yolov8.py                    YOLO11s training script
+├── visualize_predictions.py           Predictions with GT overlay
+├── generate_latex_tables.py           Auto LaTeX tables from results
+│
+├── ── Symbol Detection (M2) ──
+├── extract_quotes_for_labeling.py     Extract quote crops for labeling
+├── remove_angle_labels.py             Remove angle class from LabelMe JSONs
+├── convert_symbols_to_yolo.py         LabelMe annotations → YOLO detection
+├── balance_symbol_dataset.py          Synthetic generation for rare classes
+├── train_symbol_detector.py           YOLO11n symbol detector training
+├── test_symbol_detector.py            Evaluation + preview on blueprints
+│
+├── ── Symbol Classification (M3) ──
+├── rebuild_symbol_dataset.py          Build classification dataset from LabelMe
+├── generate_background.py             Generate background class for M3
+├── augment_arrow_tip.py               Arrow tip augmentation → linear class
+├── augment_surface_finish.py          Surface finish real crop augmentation
+├── augment_angle.py                   Angle real crop augmentation
+├── train_symbol_classifier.py         YOLO11s-cls classifier training
 ├── analyze_symbol_dataset.py          Dataset class distribution analysis
-├── convert_symbols_to_yolo.py         LabelMe symbol annotations → YOLO detection
-├── balance_symbol_dataset.py          Synthetic generation for rare symbol classes
-├── train_symbol_detector.py           GD&T symbol detector training
-├── visualize_predictions.py           Predictions with GT overlay visualization
-├── generate_latex_tables.py           Auto LaTeX tables from training results
-└── pipeline_gui.py                    Full two-stage interactive inference GUI
+│
+└── ── Inference ──
+    └── pipeline_gui.py                Full M1+M2+M3 interactive GUI
 ```
 
 ---
@@ -124,99 +160,98 @@ pip install labelme
 
 ## Full Pipeline — Step by Step
 
-> The pipeline below assumes you have your own annotated dataset
-> in LabelMe JSON format with the following structure:
+> The pipeline assumes an annotated dataset in LabelMe JSON format:
 >
 > ```
 > project_folder/
 > ├── project_1/
 > │   ├── immagini/    ← images
 > │   └── labels/      ← LabelMe JSON files
-> ├── project_2/
-> │   ├── immagini/
-> │   └── labels/
-> ...
+> └── project_2/ ...
 > ```
 
 ### Phase 1 — Quote Detection Dataset
 
 ```bash
-# Step 1 — Convert LabelMe annotations to YOLO format
-# Images are resized to MAX_SIDE=1600px during copy.
-# Val and test sets are taken from separate project folders
-# to measure generalisation across different companies.
+# Convert LabelMe annotations to YOLO format (MAX_SIDE=1600px)
+# Val/test taken from separate company folders for generalisation
 python convert_to_yolo_global.py
 
-# Step 2 — Apply scan-quality augmentation (x10 on train set)
-# Adds photometric degradation, blur, zoom, perspective,
-# construction lines, JPEG artifacts, and partial occlusion.
+# Scan-quality augmentation x10 on train set
 python augment_dataset.py
 
-# Step 3 — Generate structured synthetic blueprints
-# Creates blueprint-like images with border, title blocks,
-# and real quote crops arranged in various layouts.
+# Generate structured synthetic blueprints
 python generate_blueprint_strutturato.py
 
-# Step 4 — Merge all dataset sources into a single dataset
-# Edit DATASETS list in merge_datasets.py before running.
-python merge_datasets.py
+# (Optional) Add angular/arc dimension examples
+python augment_angular_quotes.py
 
-# Step 5 — (Optional) Resize images if any exceed MAX_SIDE
+# Merge all sources
+python merge_datasets.py
 python resize_dataset.py
 ```
 
-### Phase 2 — Train Quote Detector
+### Phase 2 — Train M1
 
 ```bash
-# Edit MODEL_SIZE in train_yolov8.py before running.
-# Available options: "yolov8n", "yolov8s", "yolo11s"
-# Results saved to: runs/detect/sintesi_genesi/<RUN_NAME>/
+# Edit MODEL_SIZE and RUN_NAME in train_yolov8.py
 python train_yolov8.py
 
-# Visualize predictions on test set with GT overlay
 python visualize_predictions.py
-
-# Generate LaTeX tables from training results (for thesis)
 python generate_latex_tables.py
 ```
 
 ### Phase 3 — Symbol Detection Dataset
 
 ```bash
-# Step 1 — Extract all quote crops for manual labeling
+# Extract quote crops for labeling
 python extract_quotes_for_labeling.py
 
-# Step 2 — Label with LabelMe
-# Draw bounding boxes around GD&T symbols and assign class.
-# Skip quotes with no symbol (they will be class "linear").
+# Label with LabelMe — draw bbox around each symbol, assign class
 labelme quote_per_labeling --labels quote_per_labeling/classes.txt --nodata
 
-# Step 3 — Check class distribution
-python analyze_symbol_dataset.py
+# Remove angle class (causes false positives with decimal points)
+python remove_angle_labels.py
 
-# Step 4 — Convert LabelMe symbol annotations to YOLO detection format
+# Convert to YOLO detection format
 python convert_symbols_to_yolo.py
 
-# Step 5 — Balance rare classes with synthetic symbol generation
-# Generates synthetic crops to reach TARGET_N examples per class.
+# Balance rare classes with synthetic generation
 python balance_symbol_dataset.py
 ```
 
-### Phase 4 — Train Symbol Detector
+### Phase 4 — Train M2
 
 ```bash
-# Train YOLO11n symbol detector
-# Results saved to: runs/detect/sintesi_genesi/simboli_detector_run1/
 python train_symbol_detector.py
+
+# Test on blueprints
+python test_symbol_detector.py --dir path/to/blueprints/
 ```
 
-### Phase 5 — Run Full Pipeline
+### Phase 5 — Symbol Classification Dataset
 
 ```bash
-# Launch interactive GUI
-# Load Stage 1 weights (quote detector)
-# Load Stage 2 weights (symbol detector)
-# Load any blueprint image and run the full pipeline
+# Rebuild dataset from LabelMe annotations (pure symbol crops)
+python rebuild_symbol_dataset.py
+
+# Generate background class (M2 false positives rejection)
+python generate_background.py
+
+# Augment specific classes from real crops
+python augment_arrow_tip.py        # arrow tips → linear
+python augment_surface_finish.py   # real surface finish crops
+```
+
+### Phase 6 — Train M3
+
+```bash
+python train_symbol_classifier.py
+```
+
+### Phase 7 — Run Full Pipeline
+
+```bash
 python pipeline_gui.py
 ```
 
@@ -224,19 +259,33 @@ python pipeline_gui.py
 
 ## Augmentation Strategy
 
-A custom augmentation pipeline was designed to replicate the visual degradation of real industrial scanner output. All transforms apply to training images only and preserve YOLO bounding box coordinates.
+### Quote Detection (M1)
 
-**Photometric degradation** simulates scanner-specific artifacts: paper yellowing, gamma correction for under/over-exposed scans, contrast reduction for faded ink, non-uniform illumination gradients, and fine-grained Gaussian noise.
+A custom augmentation pipeline replicates real industrial scanner degradation. All transforms preserve YOLO bounding box coordinates.
 
-**Geometric transforms** include aggressive zoom crops centered on dense dimension regions (scale 0.35–1.5×), small rotations (±15°), and perspective distortion to simulate documents not lying flat on the scanner.
+**Photometric degradation** — paper yellowing, gamma correction, contrast reduction, non-uniform illumination, Gaussian noise.
 
-**Blur modes** cover three types: Gaussian blur, motion blur with random orientation, and circular defocus blur for a lifted document corner effect.
+**Geometric transforms** — aggressive zoom (0.35–1.5×), small rotations (±15°), perspective distortion for documents not flat on scanner.
 
-**Construction line overlay** draws 50–120 parallel black lines (1px) over the image, replicating the dense hatching found in section views — one of the main sources of false positives in baseline models.
+**Blur modes** — Gaussian, motion blur (random orientation), circular defocus.
 
-**Compression and ink artifacts** apply JPEG compression (quality 40–75), morphological erosion on dark pixels to simulate broken ink lines, and partial occlusion with paper-colored rectangles.
+**Construction line overlay** — 50–120 parallel black lines (1px) simulating section view hatching, the main source of false positives in baseline models.
 
-**Synthetic data generation** produces structured blueprint images with a border frame, title blocks on inner edges, and real quote crops in scattered or overlapping layouts, to increase training diversity without additional manual annotation.
+**Compression and ink artifacts** — JPEG compression (quality 40–75), morphological erosion for broken ink lines, partial occlusion.
+
+**Synthetic blueprints** — structured images with border, title blocks, and real quote crops in scattered/overlapping layouts.
+
+### Symbol Classification (M3)
+
+Additional augmentation designed for small GD&T symbols:
+
+**Faded ink** — dark pixels are lightened to simulate old or low-quality ink, producing grey strokes instead of black.
+
+**Light construction strokes** — 1–5 grey lines (160–220 brightness) overlaid to simulate blueprint context lines passing over the symbol.
+
+**Morphological variation** — both erosion (consumed ink) and dilation (ink bleed), shear distortion.
+
+**Salt and pepper noise** — scattered white/black pixels simulating scanner sensor noise.
 
 ---
 
@@ -246,35 +295,39 @@ A custom augmentation pipeline was designed to replicate the visual degradation 
 python pipeline_gui.py
 ```
 
-- Load Stage 1 and Stage 2 model weights via file browser
-- Load any blueprint image
-- Run the full two-stage pipeline with a single click
-- View annotated results with color-coded GD&T classes
-- Browse individual detected quote crops in a scrollable grid
-- Zoom and pan on the result image (scroll wheel + drag)
+- Load M1, M2, M3 weights independently via file browser
+- Load any blueprint image (large images are automatically tiled)
+- **Tab 1 — QUOTE (M1)**: all detected dimension boxes highlighted in blue with index and confidence
+- **Tab 2 — IMMAGINE ANNOTATA**: full M1+M2+M3 result with color-coded symbol labels
+- **Tab 3 — SIMBOLI TROVATI**: scrollable grid of all detected symbol crops with class and confidence
+- Zoom (scroll wheel) and pan (drag) on both image tabs independently
+- Context margin around each quote ensures border symbols are not cut off
+- M3 background class suppresses M2 false positives automatically
 
 ---
 
 ## Architecture Progression
 
-| Phase | Model | Type | Notes |
-|---|---|---|---|
-| 1 | YOLOv8n | CNN anchor-free | Baseline |
-| 2 | YOLOv8s | CNN anchor-free | Larger backbone |
-| 3 | YOLO11s | CNN + attention | Best performing |
+| Phase | Model | Type | Task | Notes |
+|---|---|---|---|---|
+| 1 | YOLOv8n | CNN anchor-free | Quote detection | Baseline |
+| 2 | YOLOv8s | CNN anchor-free | Quote detection | Larger backbone |
+| 3 | YOLO11s | CNN + attention | Quote detection | Best — 0.972 mAP@50 |
+| 4 | YOLO11n | CNN + attention | Symbol detection | 0.966 mAP@50 |
+| 5 | YOLO11s-cls | CNN + attention | Symbol classification | 0.937 Top-1 |
 
 ---
 
 ## License
 
-This repository contains only the code. The dataset used for training is proprietary and owned by the industrial partner. No data is included or distributed with this project.
+This repository contains only the code. The dataset is proprietary and owned by the industrial partner. No data is included or distributed.
 
 ---
 
 ## Citation
 
 ```bibtex
-@mastersthesis{blueprintcv2025,
+@mastersthesis{blueprintcv2026,
   title  = {BlueprintCV: Automated Detection and GD&T Symbol Recognition
              in Industrial Technical Drawings},
   author = {Eduardo Pane},
