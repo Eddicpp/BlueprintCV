@@ -17,7 +17,10 @@ LABELED_DIR = "./quote_per_labeling"
 SYMBOL_CLASSES = [
     "diameter",
     "radius",
+<<<<<<< HEAD
     "angle",
+=======
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
     "surface_finish",
     "concentricity",
     "cylindricity",

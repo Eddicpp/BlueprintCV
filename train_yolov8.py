@@ -1,12 +1,20 @@
 """
+<<<<<<< HEAD
 SINTESI: Genesi — YOLOv8 Training + Valutazione con grafici per classe
+=======
+SINTESI: Genesi — YOLO11s Training + Valutazione con grafici per classe
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
 GPU: NVIDIA locale
 """
 
 import json
 import numpy as np
 import matplotlib
+<<<<<<< HEAD
 matplotlib.use("Agg")           # backend non-interattivo, funziona senza display
+=======
+matplotlib.use("Agg")
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
 import matplotlib.pyplot as plt
 from pathlib import Path
 from ultralytics import YOLO
@@ -17,6 +25,7 @@ from ultralytics import YOLO
 
 DATASET_YAML = "./dataset_finale/data.yaml"
 CLASSES      = ["border", "table", "quote"]
+<<<<<<< HEAD
 MODEL_SIZE = "rtdetr-l"
 EPOCHS       = 100
 IMG_SIZE     = 640
@@ -24,6 +33,16 @@ BATCH_SIZE   = 8
 PATIENCE     = 20
 PROJECT      = "sintesi_genesi"
 RUN_NAME   = "rtdetr_run1"
+=======
+MODEL_SIZE   = "yolo11s.pt"
+EPOCHS       = 200
+IMG_SIZE   = 640
+BATCH_SIZE = 8
+PATIENCE     = 20
+PROJECT      = "sintesi_genesi"
+RUN_NAME     = "yolo11s_run4_augmented"
+AMP          = False   # disabilita per GTX 1660
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
 
 COLORS = {
     "border": "#4A90D9",
@@ -37,10 +56,17 @@ COLORS = {
 
 def train():
     print("=" * 55)
+<<<<<<< HEAD
     print("SINTESI: Genesi — Training YOLOv8n")
     print("=" * 55)
 
     model = YOLO(f"{MODEL_SIZE}")
+=======
+    print("SINTESI: Genesi — Training YOLO11s")
+    print("=" * 55)
+
+    model = YOLO(MODEL_SIZE)
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
 
     model.train(
         data        = DATASET_YAML,
@@ -52,6 +78,10 @@ def train():
         project     = PROJECT,
         name        = RUN_NAME,
         exist_ok    = True,
+<<<<<<< HEAD
+=======
+        amp         = AMP,
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
         plots       = True,
         save        = True,
         save_period = 10,
@@ -137,8 +167,11 @@ def evaluate(run_dir: Path):
 # ─────────────────────────────────────────
 
 def plot_per_class_metrics(per_class: dict, overall: dict, run_dir: Path):
+<<<<<<< HEAD
     """Barchart Precision / Recall / AP50 / AP50-95 per classe"""
 
+=======
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
     metrics_keys = ["precision", "recall", "ap50", "ap50_95"]
     labels_map   = {
         "precision": "Precision",
@@ -157,7 +190,11 @@ def plot_per_class_metrics(per_class: dict, overall: dict, run_dir: Path):
     x       = np.arange(len(classes))
 
     fig, axes = plt.subplots(1, 4, figsize=(18, 5))
+<<<<<<< HEAD
     fig.suptitle("Metriche per classe — YOLOv8n Baseline",
+=======
+    fig.suptitle("Metriche per classe — YOLO11s",
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
                  fontsize=14, fontweight="bold")
 
     for ax, key in zip(axes, metrics_keys):
@@ -194,11 +231,18 @@ def plot_per_class_metrics(per_class: dict, overall: dict, run_dir: Path):
 
 
 def plot_training_curves(run_dir: Path):
+<<<<<<< HEAD
     """Loss e mAP per epoca da results.csv"""
     import csv
     csv_path = run_dir / "results.csv"
     if not csv_path.exists():
         print(f"results.csv non trovato — salto le curve di training")
+=======
+    import csv
+    csv_path = run_dir / "results.csv"
+    if not csv_path.exists():
+        print("results.csv non trovato — salto le curve di training")
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
         return
 
     rows = []
@@ -218,6 +262,7 @@ def plot_training_curves(run_dir: Path):
         return
 
     epochs     = [r["epoch"] for r in rows]
+<<<<<<< HEAD
     train_loss = [r.get("train/box_loss", 0) + r.get("train/cls_loss", 0) for r in rows]
     val_loss   = [r.get("val/box_loss", 0)   + r.get("val/cls_loss", 0)   for r in rows]
     map50      = [r.get("metrics/mAP50(B)", 0)    for r in rows]
@@ -225,20 +270,36 @@ def plot_training_curves(run_dir: Path):
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
     fig.suptitle("Curve di training — YOLOv8n", fontsize=14, fontweight="bold")
+=======
+    train_loss = [r.get("train/box_loss",0)+r.get("train/cls_loss",0) for r in rows]
+    val_loss   = [r.get("val/box_loss",0)+r.get("val/cls_loss",0)     for r in rows]
+    map50      = [r.get("metrics/mAP50(B)",0)    for r in rows]
+    map50_95   = [r.get("metrics/mAP50-95(B)",0) for r in rows]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    fig.suptitle("Curve di training — YOLO11s", fontsize=14, fontweight="bold")
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
 
     ax1.plot(epochs, train_loss, color="#4A90D9", linewidth=1.8, label="Train loss")
     ax1.plot(epochs, val_loss,   color="#E8A838", linewidth=1.8, label="Val loss")
     ax1.set_title("Loss (box + cls)")
+<<<<<<< HEAD
     ax1.set_xlabel("Epoca")
     ax1.set_ylabel("Loss")
     ax1.legend()
     ax1.grid(alpha=0.3, linestyle="--")
     ax1.spines["top"].set_visible(False)
     ax1.spines["right"].set_visible(False)
+=======
+    ax1.set_xlabel("Epoca"); ax1.set_ylabel("Loss")
+    ax1.legend(); ax1.grid(alpha=0.3, linestyle="--")
+    ax1.spines["top"].set_visible(False); ax1.spines["right"].set_visible(False)
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
 
     ax2.plot(epochs, map50,    color="#5DB87A", linewidth=1.8, label="mAP@50")
     ax2.plot(epochs, map50_95, color="#9B59B6", linewidth=1.8, label="mAP@50-95")
     ax2.set_title("mAP per epoca")
+<<<<<<< HEAD
     ax2.set_xlabel("Epoca")
     ax2.set_ylabel("mAP")
     ax2.set_ylim(0, 1.05)
@@ -246,6 +307,11 @@ def plot_training_curves(run_dir: Path):
     ax2.grid(alpha=0.3, linestyle="--")
     ax2.spines["top"].set_visible(False)
     ax2.spines["right"].set_visible(False)
+=======
+    ax2.set_xlabel("Epoca"); ax2.set_ylabel("mAP"); ax2.set_ylim(0,1.05)
+    ax2.legend(); ax2.grid(alpha=0.3, linestyle="--")
+    ax2.spines["top"].set_visible(False); ax2.spines["right"].set_visible(False)
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
 
     plt.tight_layout()
     out = run_dir / "grafici_training.png"
@@ -255,6 +321,7 @@ def plot_training_curves(run_dir: Path):
 
 
 def plot_radar(run_dir: Path, per_class: dict):
+<<<<<<< HEAD
     """Radar chart Precision / Recall / AP50 per classe"""
     classes   = list(per_class.keys())
     keys      = ["precision", "recall", "ap50"]
@@ -264,6 +331,16 @@ def plot_radar(run_dir: Path, per_class: dict):
     angles   += angles[:1]
 
     fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
+=======
+    classes = list(per_class.keys())
+    keys    = ["precision", "recall", "ap50"]
+    labels  = ["Precision", "Recall", "AP@50"]
+    n       = len(keys)
+    angles  = np.linspace(0, 2*np.pi, n, endpoint=False).tolist()
+    angles += angles[:1]
+
+    fig, ax = plt.subplots(figsize=(7,7), subplot_kw=dict(polar=True))
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
     fig.suptitle("Radar — Metriche per classe", fontsize=13, fontweight="bold")
 
     for cls in classes:
@@ -272,12 +349,19 @@ def plot_radar(run_dir: Path, per_class: dict):
         ax.plot(angles, vals, linewidth=2, color=color, label=cls)
         ax.fill(angles, vals, alpha=0.12, color=color)
 
+<<<<<<< HEAD
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(labels, fontsize=11)
     ax.set_ylim(0, 1)
     ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
     ax.grid(color="gray", alpha=0.3)
     ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1), fontsize=10)
+=======
+    ax.set_xticks(angles[:-1]); ax.set_xticklabels(labels, fontsize=11)
+    ax.set_ylim(0,1); ax.set_yticks([0.2,0.4,0.6,0.8,1.0])
+    ax.grid(color="gray", alpha=0.3)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.3,1.1), fontsize=10)
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
 
     out = run_dir / "grafici_radar.png"
     plt.savefig(out, dpi=150, bbox_inches="tight")
@@ -286,6 +370,7 @@ def plot_radar(run_dir: Path, per_class: dict):
 
 
 # ─────────────────────────────────────────
+<<<<<<< HEAD
 # 4. INFERENZA RAPIDA
 # ─────────────────────────────────────────
 
@@ -315,10 +400,13 @@ def quick_inference(image_path: str, run_dir: Path):
 
 
 # ─────────────────────────────────────────
+=======
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
 # MAIN
 # ─────────────────────────────────────────
 
 if __name__ == "__main__":
+<<<<<<< HEAD
 
     # 1. Training
     run_dir = train()
@@ -328,12 +416,22 @@ if __name__ == "__main__":
     plot_training_curves(run_dir)
 
     # 3. Valutazione sul test set
+=======
+    run_dir = train()
+
+    print("\nGenerazione grafici training...")
+    plot_training_curves(run_dir)
+
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
     result = evaluate(run_dir)
 
     if result:
         per_class, overall = result
+<<<<<<< HEAD
 
         # 4. Grafici per classe
+=======
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
         print("\nGenerazione grafici per classe...")
         plot_per_class_metrics(per_class, overall, run_dir)
         plot_radar(run_dir, per_class)
@@ -345,4 +443,8 @@ if __name__ == "__main__":
     print("  grafici_radar.png      — radar per classe")
     print("  metrics_per_class.json — metriche in JSON")
     print("  weights/best.pt        — pesi migliori")
+<<<<<<< HEAD
     print("=" * 55)
+=======
+    print("=" * 55)
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)

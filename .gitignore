@@ -1,0 +1,2 @@
+"dataset_*/" 
+"runs/"  "*.pt"  "__pycache__/"  "*.pyc"  "quote_per_labeling/"  "angular_quotes/"  "arrow_tip/"  "surface_finish_real/"  "angle_real/"  "test_symbol_output/" 

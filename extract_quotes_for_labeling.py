@@ -28,7 +28,10 @@ OUTPUT_DIR   = "./quote_per_labeling"
 SYMBOL_CLASSES = [
     "diameter",       # Ø
     "radius",         # R
+<<<<<<< HEAD
     "angle",          # arco con trattino °
+=======
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
     "tolerance",      # ±
     "depth",          # ↓
     "surface_finish", # segno finitura √

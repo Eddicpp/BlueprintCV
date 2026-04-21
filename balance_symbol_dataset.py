@@ -156,11 +156,40 @@ def draw_symbol_on_patch(patch, cls, color, font_scale):
         sx1,sy1,sx2,sy2 = cx-r-1,cy-r-1,cx+r+1,cy+r//3+1
 
     elif cls == "surface_finish":
+<<<<<<< HEAD
         cv2.line(patch,(cx-r,cy+r//3),(cx-r//4,cy-r//2),color,th,cv2.LINE_AA)
         cv2.line(patch,(cx-r//4,cy-r//2),(cx+r,cy-r//2),color,th,cv2.LINE_AA)
         val = str(random.choice([0.8,1.6,3.2,6.3,12.5]))
         cv2.putText(patch,val,(cx-r//4,cy-r//2-3),font,font_scale*0.6,color,1)
         sx1,sy1,sx2,sy2 = cx-r-1,cy-r//2-8,cx+r+1,cy+r//3+1
+=======
+        # Fedele all'immagine reale: V rovesciata con linea orizzontale sopra
+        # e numero/valore sopra la linea (es. √0 con linea)
+
+        # Linea orizzontale in alto
+        line_y = cy - r//2
+        cv2.line(patch, (cx-r, line_y), (cx+r, line_y), color, th, cv2.LINE_AA)
+
+        # V rovesciata sotto la linea (gambo sinistro più corto)
+        tip_y  = cy + r//2          # punta della V in basso
+        left_x = cx - r
+        right_x= cx + r
+        mid_x  = cx - r//4          # la V non è simmetrica — gambo sx più corto
+
+        cv2.line(patch, (left_x, line_y), (mid_x, tip_y),
+                 color, th, cv2.LINE_AA)
+        cv2.line(patch, (mid_x, tip_y), (right_x, line_y),
+                 color, th, cv2.LINE_AA)
+
+        # Numero sopra la linea orizzontale
+        val = str(random.choice([0.8, 1.6, 3.2, 6.3, 12.5, 25]))
+        (tw,th2),_ = cv2.getTextSize(val, font, font_scale*0.7, 1)
+        cv2.putText(patch, val,
+                    (cx - tw//2, line_y - 3),
+                    font, font_scale*0.7, color, 1, cv2.LINE_AA)
+
+        sx1,sy1,sx2,sy2 = left_x-1, line_y-th2-5, right_x+1, tip_y+1
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
 
     elif cls == "concentricity":
         cv2.circle(patch,(cx,cy),r,color,th,cv2.LINE_AA)
@@ -431,4 +460,8 @@ if __name__ == "__main__":
     print(f"\nOra riallena il detector:")
     print(f"  yolo detect train data={OUTPUT_DIR}/data.yaml "
           f"model=yolo11n.pt epochs=100 imgsz=640 batch=16 "
+<<<<<<< HEAD
           f"project=sintesi_genesi name=simboli_detector_run1")
+=======
+          f"project=sintesi_genesi name=simboli_detector_run1")
+>>>>>>> 24e961a (BlueprintCV: pipeline M1+M2+M3, tiling, augmentation aggiornata)
