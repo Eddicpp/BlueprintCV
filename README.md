@@ -110,7 +110,7 @@ Place pretrained weights (`best_m1.pt`, `best_m2.pt`, `best_m3.pt`) under `weigh
 ### Interactive GUI
 
 ```bash
-# Full M1 → M2 → M3 pipeline with tabbed visualisation
+# Full M1 → M2 → M3 pipeline with tabbed visualization
 python pipeline_gui.py
 
 # Inspection GUI — browse predictions on single images or folders
@@ -149,13 +149,13 @@ python convert_to_yolo_global.py
 python convert_symbols_to_yolo.py
 ```
 
-### Evaluation and visualisation
+### Evaluation and visualization
 
 ```bash
 # Test the M2 symbol detector on single crops or a full dataset
 python test_symbol_detector.py
 
-# Visualise predictions overlaid on the test set
+# Visualize predictions overlaid on the test set
 python visualize_predictions.py
 
 # Export per-class metrics as LaTeX tables (for reports/papers)
@@ -202,7 +202,7 @@ BlueprintCV/
 ├── remove_angle_labels.py        #   ↳
 │
 ├── test_symbol_detector.py       # M2 inference tests
-├── visualize_predictions.py      # Prediction visualisation
+├── visualize_predictions.py      # Prediction visualization
 ├── run_preview.py                # Quick preview helper
 ├── generate_latex_tables.py      # Export metrics to LaTeX
 │
