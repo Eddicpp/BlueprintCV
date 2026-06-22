@@ -7,6 +7,7 @@
 ## Demo
 
 <img width="466" height="331" alt="image" src="https://github.com/user-attachments/assets/5627ace8-cb7a-44c7-b73f-cad97eb29171" />
+<img width="258" height="334" alt="image" src="https://github.com/user-attachments/assets/09c9b6f5-6817-4fd9-a507-6b44ba986b3a" />
 
 ```
 [ blueprint scan ]  →  [ quotes detected ]  →  [ GD&T symbols classified ]
@@ -22,11 +23,10 @@
 
 Industrial blueprints carry dozens of dimensional annotations, each one possibly tagged with a GD&T symbol (flatness, perpendicularity, position, diameter, surface finish, etc.). Reading and transcribing these by hand doesn't scale.
 
-BlueprintCV splits the problem into specialized stages, since "find an annotation," "recognize a tiny symbol inside it," and "classify which exact symbol it is" are different visual problems:
+BlueprintCV splits the problem into two specialized detectors, since "find an annotation" and "recognize a tiny symbol inside it" are different visual problems:
 
 - **M1 — Quote Detector**: finds every dimensional annotation region
-- **M2 — Symbol Detector**: locates the GD&T symbol inside each region M1 finds
-- **M3 — Symbol Classifier**: refines the final symbol classification
+- **M2 — Symbol Detector**: detects and classifies the GD&T symbol inside each region M1 finds
 
 ---
 
@@ -36,7 +36,7 @@ Real labeled blueprints were combined with synthetic data, generated to cover sy
 
 **M1 (quotes)** — real scans + custom augmentation (gaussian-sampled faded lines simulating cluttered backgrounds) + synthetic blueprint layouts for generalization, later expanded with lower-quality scans and a few hand-drawn sketches.
 
-**M2 / M3 (symbols)** — 13 classes (`diameter`, `radius`, `surface_finish`, `concentricity`, `cylindricity`, `position`, `flatness`, `perpendicularity`, `total_runout`, `circular_runout`, `slope`, `conical_taper`, `symmetry`), generated procedurally across 12 layouts (single-symbol, stacked, inline, grouped), with gaussian noise on shape/position to mimic real-world imperfections. **Adaptive augmentation** scales the synthetic-to-real ratio per class — abundant classes get little augmentation, scarce ones get up to 10x.
+**M2 (symbols)** — 13 classes (`diameter`, `radius`, `surface_finish`, `concentricity`, `cylindricity`, `position`, `flatness`, `perpendicularity`, `total_runout`, `circular_runout`, `slope`, `conical_taper`, `symmetry`), generated procedurally across 12 layouts (single-symbol, stacked, inline, grouped), with gaussian noise on shape/position to mimic real-world imperfections. **Adaptive augmentation** scales the synthetic-to-real ratio per class — abundant classes get little augmentation, scarce ones get up to 10x.
 
 | Split | Source |
 |---|---|
@@ -51,7 +51,6 @@ Real labeled blueprints were combined with synthetic data, generated to cover sy
 |---|---|---|
 | M1 — Quote Detector | YOLO11s | 1 class, real + augmented data |
 | M2 — Symbol Detector | YOLOv8 | 13 classes, real + synthetic data |
-| M3 — Symbol Classifier | CNN classifier | Refines M2's symbol classification |
 
 YOLO was chosen for its accuracy/speed trade-off and ease of fine-tuning on a small/medium custom dataset, with both local-GPU and cloud training as options.
 
@@ -64,11 +63,10 @@ YOLO was chosen for its accuracy/speed trade-off and ease of fine-tuning on a sm
 2. M1            detect quote boxes
 3. Merge         duplicate overlapping boxes merged (overlap_ratio > 60%)
 4. Crop          each quote box cropped with +40% context margin
-5. M2            detect symbol region inside each crop
-6. M3            classify the exact GD&T symbol
-7. OCR filter    ambiguous symbols (radius "R" / perpendicularity "T")
+5. M2            detect & classify symbol inside each crop
+6. OCR filter    ambiguous symbols (radius "R" / perpendicularity "T")
                   checked against OCR'd text to reject false positives
-8. Output        {quote_box, symbol, confidence} per blueprint
+7. Output        {quote_box, symbol, confidence} per blueprint
 ```
 
 ---
@@ -88,17 +86,6 @@ On a held-out test set of 180 real blueprints:
 | Recall | 0.909 |
 | F1 | 0.921 |
 
-<img width="1628" height="1349" alt="confusion_matrix_m1" src="https://github.com/user-attachments/assets/ebd53138-1c06-456c-8c76-efdb1171cebc" />
-
----
-
-## Example Outputs
-
-<img width="351" height="309" alt="image" src="https://github.com/user-attachments/assets/19086041-c154-475b-83f2-5c4099be1083" />
-<img width="227" height="107" alt="image" src="https://github.com/user-attachments/assets/7675c61c-b49d-4b40-9e37-8c00aaef1fea" />
-<img width="1058" height="510" alt="image" src="https://github.com/user-attachments/assets/696662ce-469d-4321-8423-fedcbaf8d32b" />
-
-
 ---
 
 ## Installation
@@ -116,7 +103,7 @@ Place pretrained weights (`best_m1.pt`, `best_m2.pt`) under `weights/`.
 ## Usage
 
 ```bash
-# Full pipeline on a single blueprint
+# Full M1 → M2 pipeline on a single blueprint
 python test_symbol_detector.py --image path/to/image.jpg
 
 # Train M1 (quote detector)
@@ -125,10 +112,7 @@ python tune_quote_detector.py
 # Train M2 (symbol detector)
 python train_symbol_detector.py
 
-# Train M3 (symbol classifier)
-python train_symbol_classifier.py
-
-# Build the synthetic training dataset for M2/M3
+# Build the synthetic training dataset for M2
 python generate_symbol_dataset.py
 
 # Interactive GUIs
@@ -176,11 +160,10 @@ BlueprintCV/
 ├── Training
 │   ├── tune_quote_detector.py           # M1 training / hyperparameter tuning
 │   ├── train_symbol_detector.py         # M2 training
-│   ├── train_symbol_classifier.py       # M3 training
 │   └── train_yolov8.py                 # Generic YOLOv8 training entry point
 │
 ├── Inference & evaluation
-│   ├── test_symbol_detector.py          # Full M1→M2(→M3) pipeline test script
+│   ├── test_symbol_detector.py          # Full M1→M2 pipeline test script
 │   ├── visualize_predictions.py         # Draws predicted boxes/labels on images
 │   ├── run_preview.py                   # Quick preview of model outputs
 │   └── filter_ambiguous_symbols.py      # OCR-based false positive filter (R / T)
@@ -201,7 +184,7 @@ BlueprintCV/
 
 ## Limitations & Next Steps
 
-M2/M3 occasionally confuse `radius`/`perpendicularity` with the letters "R"/"T" in noisy scans — an OCR filter helps but doesn't fully solve it. Real labeled data is still limited for some symbol classes, so performance there leans on synthetic data quality.
+M2 occasionally confuses `radius`/`perpendicularity` with the letters "R"/"T" in noisy scans — an OCR filter helps but doesn't fully solve it. Real labeled data is still limited for some symbol classes, so performance there leans on synthetic data quality.
 
 Next: more real-world data, a lighter model for edge deployment, and a simple web demo (Streamlit/Gradio) for interactive testing.
 
