@@ -1,15 +1,12 @@
 # BlueprintCV
 
-<img width="466" height="331" alt="image" src="https://github.com/user-attachments/assets/5627ace8-cb7a-44c7-b73f-cad97eb29171" />
-<img width="258" height="334" alt="image" src="https://github.com/user-attachments/assets/09c9b6f5-6817-4fd9-a507-6b44ba986b3a" />
-
 **BlueprintCV** automatically detects and classifies GD&T (Geometric Dimensioning and Tolerancing) symbols on scanned industrial blueprints, turning manual transcription into a fast, repeatable detection pipeline.
 
 ---
 
 ## Demo
 
-> *Add a screenshot here: a real blueprint with M1 quote boxes (gray) and M2 symbol boxes (colored) overlaid — output of `run_pipeline.py`.*
+<img width="466" height="331" alt="image" src="https://github.com/user-attachments/assets/5627ace8-cb7a-44c7-b73f-cad97eb29171" />
 
 ```
 [ blueprint scan ]  →  [ quotes detected ]  →  [ GD&T symbols classified ]
@@ -91,13 +88,16 @@ On a held-out test set of 180 real blueprints:
 | Recall | 0.909 |
 | F1 | 0.921 |
 
-> *Add confusion matrix image here.*
+<img width="1628" height="1349" alt="confusion_matrix_m1" src="https://github.com/user-attachments/assets/ebd53138-1c06-456c-8c76-efdb1171cebc" />
 
 ---
 
 ## Example Outputs
 
-> *Add 2-3 side-by-side examples: a correct detection, and a failure case (e.g. a symbol missed in a low-contrast scan, or an R/T ambiguity caught by the OCR filter).*
+<img width="351" height="309" alt="image" src="https://github.com/user-attachments/assets/19086041-c154-475b-83f2-5c4099be1083" />
+<img width="227" height="107" alt="image" src="https://github.com/user-attachments/assets/7675c61c-b49d-4b40-9e37-8c00aaef1fea" />
+<img width="1058" height="510" alt="image" src="https://github.com/user-attachments/assets/696662ce-469d-4321-8423-fedcbaf8d32b" />
+
 
 ---
 
