@@ -1,90 +1,81 @@
 # BlueprintCV
 
-**BlueprintCV** is a two-stage computer vision pipeline for automatic detection and recognition of **GD&T (Geometric Dimensioning and Tolerancing)** annotations on scanned industrial technical drawings (blueprints).
-
-The goal is to automatically localize every dimensional callout in a blueprint and classify the GD&T symbol it contains — replacing slow, error-prone manual transcription with an automated detection pipeline.
+**BlueprintCV** automatically detects and classifies GD&T (Geometric Dimensioning and Tolerancing) symbols on scanned industrial blueprints, turning manual transcription into a fast, repeatable detection pipeline.
 
 ---
 
 ## Demo
 
-> *Add a screenshot or short GIF here showing a blueprint before/after running through the full M1 → M2 pipeline.*
+> *Add a screenshot here: a real blueprint with M1 quote boxes (gray) and M2 symbol boxes (colored) overlaid — output of `run_pipeline.py`.*
 
 ```
-[ original blueprint ]   →   [ M1: quote regions detected ]   →   [ M2: GD&T symbols classified ]
+[ blueprint scan ]  →  [ quotes detected ]  →  [ GD&T symbols classified ]
 ```
+
+**Output**: a structured list of `{quote_box, symbol, confidence}` per blueprint — JSON-ready, suitable for ingestion into PLM/ERP systems or for generating an inspection checklist automatically instead of by hand.
+
+**Typical use case**: a quality or design engineer uploads a scanned drawing and gets back every GD&T callout pre-located and labeled, instead of reading the drawing line by line.
 
 ---
 
 ## Objective
 
-Industrial blueprints contain dozens to hundreds of dimensional annotations, each one possibly carrying a GD&T symbol (flatness, perpendicularity, position, diameter, surface finish, etc.). Reading and transcribing these by hand is slow and inconsistent.
+Industrial blueprints carry dozens of dimensional annotations, each one possibly tagged with a GD&T symbol (flatness, perpendicularity, position, diameter, surface finish, etc.). Reading and transcribing these by hand doesn't scale.
 
-BlueprintCV addresses this with a **cascaded two-model detection pipeline**:
+BlueprintCV splits the problem into two specialized detectors, since "find an annotation" and "recognize a tiny symbol inside it" are different visual problems:
 
-- **M1 — Quote Detector**: localizes every dimensional annotation region in the blueprint
-- **M2 — Symbol Detector**: detects and classifies the GD&T symbol inside each region found by M1
-
-This is an **object detection** task end-to-end, built around two specialized YOLO11 models rather than a single general-purpose detector, since the two sub-problems (finding annotations vs. recognizing symbols) have very different visual scales and failure modes.
+- **M1 — Quote Detector**: finds every dimensional annotation region
+- **M2 — Symbol Detector**: classifies the GD&T symbol inside each region M1 finds
 
 ---
 
 ## Dataset
 
-Real annotated blueprints were combined with a large volume of **synthetically generated training data**, since real labeled examples were scarce for several GD&T symbol classes.
+Real labeled blueprints were combined with synthetic data, generated to cover symbol classes too rare in the real dataset.
 
-**M1 (quotes):**
-- Real scanned blueprints, manually labeled (LabelMe)
-- Custom augmentation: gaussian-sampled parallel lines simulating faded strokes and cluttered backgrounds
-- Synthetic blueprint-like layouts added to improve generalization
-- Dataset expanded with lower-quality scans, heterogeneous drawings, and a limited set of hand-drawn sketches
+**M1 (quotes)** — real scans + custom augmentation (gaussian-sampled faded lines simulating cluttered backgrounds) + synthetic blueprint layouts for generalization, later expanded with lower-quality scans and a few hand-drawn sketches.
 
-**M2 (symbols):**
-- 13 GD&T symbol classes: `diameter`, `radius`, `surface_finish`, `concentricity`, `cylindricity`, `position`, `flatness`, `perpendicularity`, `total_runout`, `circular_runout`, `slope`, `conical_taper`, `symmetry`
-- Procedural synthetic generator producing realistic feature control frames across 12 distinct layouts (single-symbol, multi-symbol stacked/inline, large+small grouped symbols)
-- Symbols rendered with gaussian noise on shape and position, to simulate real-world imperfections (manufacturers rarely draw perfectly symmetric/centered symbols, especially by hand)
-- "Chaos" synthetic samples (grids and aligned rows of symbols/characters) to harden the model against densely packed, cluttered drawings
-- **Adaptive augmentation**: the augmentation factor scales inversely with the number of real examples available per class — classes with abundant real data get little to no synthetic augmentation, scarce classes get up to 10x
+**M2 (symbols)** — 13 classes (`diameter`, `radius`, `surface_finish`, `concentricity`, `cylindricity`, `position`, `flatness`, `perpendicularity`, `total_runout`, `circular_runout`, `slope`, `conical_taper`, `symmetry`), generated procedurally across 12 layouts (single-symbol, stacked, inline, grouped), with gaussian noise on shape/position to mimic real-world imperfections. **Adaptive augmentation** scales the synthetic-to-real ratio per class — abundant classes get little augmentation, scarce ones get up to 10x.
 
 | Split | Source |
 |---|---|
-| Train | Real (labeled) + adaptive synthetic augmentation + chaos samples |
+| Train | Real (labeled) + adaptive synthetic augmentation |
 | Test  | Held-out real blueprints, manually labeled |
 
 ---
 
-## Model / Architecture
+## Model
 
 | Component | Architecture | Notes |
 |---|---|---|
-| M1 — Quote Detector | YOLO11s | Single class (`quote`), trained on real + augmented data |
-| M2 — Symbol Detector | YOLO11s | 13 classes, trained on real + synthetic data |
+| M1 — Quote Detector | YOLO11s | 1 class, real + augmented data |
+| M2 — Symbol Detector | YOLO11s | 13 classes, real + synthetic data |
 
-YOLO11 was chosen over alternatives (Faster R-CNN, DETR-style detectors) for its strong accuracy/speed trade-off and straightforward fine-tuning on small/medium custom datasets — both relevant given the project's compute constraints (local GPU + cloud training).
+YOLO11 was chosen for its accuracy/speed trade-off and ease of fine-tuning on a small/medium custom dataset, with both local-GPU and cloud training as options.
 
 ---
 
 ## Pipeline
 
 ```
-1. Input            → scanned blueprint image (.jpg / .png)
-2. M1 inference      → detect all quote bounding boxes
-3. Box merging       → overlapping duplicate detections merged (overlap_ratio > 60%)
-4. Crop + context    → each quote box cropped with +40% context margin
-5. M2 inference       → detect & classify GD&T symbol inside each crop
-6. OCR post-filter    → ambiguous symbols (radius "R" / perpendicularity "T") verified
-                        against OCR'd text in the quote cell to reject false positives
-7. Output            → structured list of {quote_box, symbol, confidence} per blueprint
+1. Input        scanned blueprint (.jpg / .png)
+2. M1            detect quote boxes
+3. Merge         duplicate overlapping boxes merged (overlap_ratio > 60%)
+4. Crop          each quote box cropped with +40% context margin
+5. M2            detect & classify symbol inside each crop
+6. OCR filter    ambiguous symbols (radius "R" / perpendicularity "T")
+                  checked against OCR'd text to reject false positives
+7. Output        {quote_box, symbol, confidence} per blueprint
 ```
 
 ---
 
 ## Results
 
-| Model | mAP@50 | Target | Notes |
-|---|---|---|---|
-| M1 — Quote Detector | **0.934** | ≥ 0.90 | Trained locally, real + augmented dataset |
-| M2 — Symbol Detector | **0.852** | ≥ 0.80 | Trained on synthetic (12 layouts) + real data |
+| Model | mAP@50 | Target |
+|---|---|---|
+| M1 — Quote Detector | **0.934** | ≥ 0.90 |
+| M2 — Symbol Detector | **0.852** | ≥ 0.80 |
 
 On a held-out test set of 180 real blueprints:
 
@@ -93,17 +84,14 @@ On a held-out test set of 180 real blueprints:
 | Precision | 0.933 |
 | Recall | 0.909 |
 | F1 | 0.921 |
-| True Positives | 3198 |
-| False Positives | 230 |
-| False Negatives | 320 |
 
-> *Add confusion matrix / PR curve images here.*
+> *Add confusion matrix image here.*
 
 ---
 
 ## Example Outputs
 
-> *Add side-by-side examples here: correct detections, and a couple of failure cases (e.g. symbols missed in very low-contrast scans, or ambiguous R/T letters before OCR filtering).*
+> *Add 2-3 side-by-side examples: a correct detection, and a failure case (e.g. a symbol missed in a low-contrast scan, or an R/T ambiguity caught by the OCR filter).*
 
 ---
 
@@ -115,28 +103,28 @@ cd BlueprintCV
 pip install -r requirements.txt
 ```
 
-Pretrained weights (`best_m1.pt`, `best_m2.pt`) should be placed under `weights/` — see `requirements.txt` for the exact `ultralytics` / `opencv-python` versions used.
+Place pretrained weights (`best_m1.pt`, `best_m2.pt`) under `weights/`.
 
 ---
 
 ## Usage
 
 ```bash
-# Run the full M1 → M2 pipeline on a single blueprint
-python test_symbol_detector.py --blueprint path/to/image.jpg
+# Full M1 → M2 pipeline on a single blueprint
+python run_pipeline.py --image path/to/image.jpg
 
 # Run on a folder of blueprints
-python test_symbol_detector.py --dir path/to/folder/
+python run_pipeline.py --dir path/to/folder/
 
-# Run only M1 (quote detector)
-python test_m1.py --dir path/to/folder/
+# Run M1 only
+python evaluate_m1.py --dir path/to/folder/
 
 # Build the synthetic training dataset for M2
-python build_dataset_simboli.py
+python generate_symbol_dataset.py
 
 # Train M1 / M2 locally
-python train_m1_local.py
-python train_m2_local.py
+python train_m1.py
+python train_m2.py
 ```
 
 ---
@@ -145,47 +133,33 @@ python train_m2_local.py
 
 ```
 BlueprintCV/
-├── build_dataset_simboli.py     # Synthetic dataset generator for M2
-├── augment_and_split.py         # Real-data augmentation + train/val/test split
+├── generate_symbol_dataset.py   # Synthetic dataset generator for M2
+├── augment_dataset.py           # Real-data augmentation + train/val/test split
 ├── filter_labels.py             # YOLO label filtering utility
 ├── merge_datasets.py            # Dataset merging utility
-├── prelabeling_gui.py           # Annotation GUI (pre-labeling + correction modes)
+├── labeling_gui.py              # Annotation GUI (pre-labeling + correction modes)
 ├── filter_ambiguous_symbols.py  # OCR-based false positive filter (R / T)
-├── train_m1_local.py            # M1 training (local GPU)
-├── train_m1_kaggle.py           # M1 training (Kaggle/cloud)
-├── train_m2_local.py            # M2 training (local GPU)
-├── train_m2_kaggle.py           # M2 training (Kaggle/cloud)
-├── test_m1.py                   # M1 evaluation script
-├── test_symbol_detector.py      # Full M1→M2 pipeline test script
+├── train_m1.py                  # M1 training
+├── train_m2.py                  # M2 training
+├── evaluate_m1.py               # M1 evaluation script
+├── run_pipeline.py              # Full M1→M2 pipeline
 ├── weights/                     # Pretrained model weights
 └── README.md
 ```
 
 ---
 
-## Limitations & Future Work
+## Limitations & Next Steps
 
-- **M2 still confuses some ambiguous symbols** (`radius` vs. the letter "R", `perpendicularity` vs. the letter "T") in low-quality scans; an OCR-based post-filter mitigates but does not fully eliminate this
-- **Real labeled data remains limited** for several GD&T classes — performance on those classes still depends heavily on synthetic augmentation quality
-- Hand-drawn sketches are only partially represented in training data; robustness on fully hand-drawn blueprints is limited
-- Possible improvements:
-  - Larger real-world dataset, especially for underrepresented symbol classes
-  - Lighter model variants (YOLO11n) for faster/edge deployment
-  - End-to-end hyperparameter tuning across both M1 and M2 jointly
-  - Web-based demo (Streamlit/Gradio) for interactive testing
-  - Direct integration with PLM/ERP systems for structured output ingestion
+M2 occasionally confuses `radius`/`perpendicularity` with the letters "R"/"T" in noisy scans — an OCR filter helps but doesn't fully solve it. Real labeled data is still limited for some symbol classes, so performance there leans on synthetic data quality.
+
+Next: more real-world data, a lighter model for edge deployment, and a simple web demo (Streamlit/Gradio) for interactive testing.
 
 ---
 
 ## Tech Stack
 
-- Python
-- PyTorch
-- Ultralytics YOLO11
-- OpenCV
-- NumPy
-- EasyOCR
-- LabelMe (annotation)
+Python · PyTorch · Ultralytics YOLO11 · OpenCV · NumPy · EasyOCR · LabelMe
 
 ---
 
