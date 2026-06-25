@@ -50,7 +50,7 @@ Real labeled blueprints were combined with synthetic data, generated to cover sy
 | Component | Architecture | Notes |
 |---|---|---|
 | M1 — Quote Detector | YOLO11s | 1 class, real + augmented data |
-| M2 — Symbol Detector | YOLOv11 | 13 classes, real + synthetic data |
+| M2 — Symbol Detector | YOLOv11s | 13 classes, real + synthetic data |
 
 YOLO was chosen for its accuracy/speed trade-off and ease of fine-tuning on a small/medium custom dataset, with both local-GPU and cloud training as options.
 
